@@ -1,0 +1,207 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum CategoryName {
+  PREVENTION
+  PROTECTION
+  REPONSE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+  PENDING
+  SUSPENDED
+}
+
+enum SubscriptionType {
+  MONTHLY
+  ANNUAL
+}
+
+enum UserRole {
+  USER
+  ADMIN
+  SUPERADMIN
+}
+
+model SubscriptionPlan {
+  id            Int              @id @default(autoincrement())
+  name          String
+  type          SubscriptionType
+  price         Decimal
+  discount      Int
+  description   String
+  isAvailable   Boolean          @default(true)
+  subscriptions Subscription[]
+}
+
+model Category {
+  id       Int          @id @default(autoincrement())
+  name     CategoryName
+  capacity Int
+  products Product[]
+}
+
+model User {
+  id            String         @id @default(cuid()) @db.VarChar(255)
+  email         String         @unique
+  role          UserRole       @default(USER)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  orders        Order[]
+  addresses     Address[]
+  payments      Payment[]
+  subscriptions Subscription[]
+  name          String         @db.Text
+  emailVerified Boolean
+  image         String?        @db.Text
+  sessions      Session[]
+  accounts      Account[]
+
+  twoFactorEnabled Boolean?
+  twofactors       TwoFactor[]
+
+  @@map("user")
+}
+
+model Product {
+  id          Int            @id @default(autoincrement())
+  name        String
+  description String
+  categoryId  Int
+  category    Category       @relation(fields: [categoryId], references: [id])
+  price       Decimal        @default(0.0)
+  quantity    Int           @default(0)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  orders      OrderProduct[]
+}
+
+model Order {
+  id          Int            @id @default(autoincrement())
+  userId      String
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  status      String         @default("Pending")
+  totalAmount Decimal        @default(0.0)
+  user        User           @relation(fields: [userId], references: [id])
+  products    OrderProduct[]
+  payment     Payment?
+}
+
+model OrderProduct {
+  id        Int     @id @default(autoincrement())
+  orderId   Int
+  productId Int
+  quantity  Int     @default(1)
+  order     Order   @relation(fields: [orderId], references: [id])
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+model Subscription {
+  id        Int              @id @default(autoincrement())
+  userId    String
+  planId    Int
+  startDate DateTime         @default(now())
+  endDate   DateTime?
+  status    String           @default("Active")
+  autoRenew Boolean          @default(true)
+  user      User             @relation(fields: [userId], references: [id])
+  plan      SubscriptionPlan @relation(fields: [planId], references: [id])
+
+  @@unique([userId, planId])
+}
+
+model Payment {
+  id        Int      @id @default(autoincrement())
+  orderId   Int?     @unique
+  userId    String
+  amount    Decimal  @default(0.0)
+  method    String
+  status    String   @default("Pending")
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  order     Order?   @relation(fields: [orderId], references: [id])
+}
+
+model Address {
+  id         Int      @id @default(autoincrement())
+  userId     String
+  street     String
+  city       String
+  postalCode String
+  country    String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id])
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime
+  updatedAt DateTime
+  ipAddress String?  @db.Text
+  userAgent String?  @db.Text
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String    @db.Text
+  providerId            String    @db.Text
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?   @db.Text
+  refreshToken          String?   @db.Text
+  idToken               String?   @db.Text
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?   @db.Text
+  password              String?   @db.Text
+  phoneNumber           String?   @db.Text
+  createdAt             DateTime
+  updatedAt             DateTime
+
+  @@map("account")
+}
+
+model Verification {
+  id         String    @id
+  identifier String    @db.Text
+  value      String    @db.Text
+  expiresAt  DateTime
+  createdAt  DateTime?
+  updatedAt  DateTime?
+
+  @@map("verification")
+}
+
+model TwoFactor {
+  id          String @id
+  secret      String @db.Text
+  backupCodes String @db.Text
+  userId      String
+  user        User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("twoFactor")
+}
